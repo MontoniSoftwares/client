@@ -1,43 +1,106 @@
 import axios from 'axios';
-import React, { useState } from 'react';
-import EditTaskModal from './EditTaskModal';
+import React, { useEffect, useState } from 'react';
+import AddTaskForm from './AddTaskForm'; // Importe o novo componente de adição
+import EditTaskModal from './EditTaskModal'; // Certifique-se de que o caminho está correto
 
-function TaskList({ tarefas, onTaskUpdated, onTaskDeleted }) {
-    const [editingTask, setEditingTask] = useState(null);
+const TaskList = () => {
+  const [tasks, setTasks] = useState([]);
+  const [editingTask, setEditingTask] = useState(null);
+  const [isAddTaskFormOpen, setIsAddTaskFormOpen] = useState(false); // Controle do formulário de adição
 
-    const handleDelete = (id) => {
-        if (window.confirm("Tem certeza que deseja excluir?")) {
-            axios.delete(`http://localhost:3000/tarefas/${id}`)
-                .then(onTaskDeleted)
-                .catch(error => console.error(error));
-        }
-    };
+  useEffect(() => {
+    fetchTasks();
+  }, []);
 
-    const handleEdit = (tarefa) => {
-        setEditingTask(tarefa);
-    };
+  const fetchTasks = async () => {
+    const response = await axios.get('http://localhost:3001/tarefas');
+    setTasks(response.data);
+  };
 
-    return (
-        <div>
-            {tarefas.map(tarefa => (
-                <div key={tarefa.id} style={{ backgroundColor: tarefa.custo >= 1000 ? 'yellow' : 'white' }}>
-                    <span>{tarefa.nome}</span>
-                    <span> - R${tarefa.custo}</span>
-                    <span> - {tarefa.data_limite}</span>
-                    <button onClick={() => handleEdit(tarefa)}>Editar</button>
-                    <button onClick={() => handleDelete(tarefa.id)}>Excluir</button>
-                </div>
-            ))}
+  const openEditModal = (task) => {
+    setEditingTask(task);
+  };
 
-            {editingTask && (
-                <EditTaskModal
-                    tarefa={editingTask}
-                    onClose={() => setEditingTask(null)}
-                    onTaskUpdated={onTaskUpdated}
-                />
-            )}
-        </div>
-    );
-}
+  const closeEditModal = () => {
+    setEditingTask(null);
+    fetchTasks(); // Recarrega as tarefas após edição
+  };
+
+  const deleteTask = async (id) => {
+    if (window.confirm('Tem certeza que deseja excluir esta tarefa?')) {
+      await axios.delete(`http://localhost:3001/tarefas/${id}`);
+      fetchTasks();
+    }
+  };
+
+  const moveTaskUp = async (id) => {
+    const currentTask = tasks.find(task => task.id === id);
+    const aboveTask = tasks.find(task => task.ordem === currentTask.ordem - 1);
+
+    if (aboveTask) {
+      await axios.put(`http://localhost:3001/tarefas/${currentTask.id}`, { ordem: aboveTask.ordem });
+      await axios.put(`http://localhost:3001/tarefas/${aboveTask.id}`, { ordem: currentTask.ordem });
+      fetchTasks();
+    }
+  };
+
+  const moveTaskDown = async (id) => {
+    const currentTask = tasks.find(task => task.id === id);
+    const belowTask = tasks.find(task => task.ordem === currentTask.ordem + 1);
+  
+    if (belowTask) {
+      await axios.put(`http://localhost:3001/tarefas/${currentTask.id}`, { ordem: belowTask.ordem });
+      await axios.put(`http://localhost:3001/tarefas/${belowTask.id}`, { ordem: currentTask.ordem });
+      fetchTasks();
+    }
+  };
+
+  const handleTaskAdded = () => {
+    fetchTasks(); // Recarrega a lista de tarefas após a inclusão
+  };
+
+  return (
+    <div>
+      <h1>Lista de Tarefas</h1>
+      <button onClick={() => setIsAddTaskFormOpen(true)}>Incluir Nova Tarefa</button>
+      {isAddTaskFormOpen && (
+        <AddTaskForm onTaskAdded={handleTaskAdded} onClose={() => setIsAddTaskFormOpen(false)} />
+      )}
+      <table>
+        <thead>
+          <tr>
+            <th>Nome da Tarefa</th>
+            <th>Custo (R$)</th>
+            <th>Data Limite</th>
+            <th>Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tasks.map((task) => (
+            <tr key={task.id} style={{ backgroundColor: task.custo >= 1000 ? 'yellow' : 'white' }}>
+              <td>{task.nome}</td>
+              <td>{task.custo}</td>
+              <td>{task.data_limite}</td>
+              <td>
+                <button onClick={() => moveTaskUp(task.id)}>⬆️</button>
+                <button onClick={() => moveTaskDown(task.id)}>⬇️</button>
+                <button onClick={() => openEditModal(task)}>✏️ Editar</button>
+                <button onClick={() => deleteTask(task.id)}>🗑️ Excluir</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {editingTask && (
+        <EditTaskModal 
+          task={editingTask} 
+          onClose={closeEditModal} 
+          fetchTasks={fetchTasks} 
+        />
+      )}
+    </div>
+  );
+};
 
 export default TaskList;
